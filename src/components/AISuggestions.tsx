@@ -1,293 +1,423 @@
-import React, { useState } from 'react';
-import { Brain, TrendingUp, DollarSign, Wrench, Target, ChevronRight, MessageSquare, Send, Lightbulb, Info, HelpCircle } from 'lucide-react';
-import { mockRecommendations, mockProperties, generatePropertyFinancials } from '../utils/mockData';
+'use client'
 
-const AISuggestions: React.FC = () => {
-  const [selectedProperty, setSelectedProperty] = useState<string>('all');
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState<Array<{id: string, type: 'user' | 'ai', message: string, timestamp: Date}>>([]);
+import React, { useState, useRef } from 'react';
+import { Property, Transaction, AIRecommendation } from '../types';
+import { formatCurrency } from '../utils/mockData';
+import { Brain, Lightbulb, TrendingUp, DollarSign, Wrench, FileText, ChevronRight, X, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import ClientProviders from '@/components/ClientProviders';
 
-  const filteredRecommendations = selectedProperty === 'all' 
-    ? mockRecommendations 
-    : mockRecommendations.filter(rec => rec.property_id === selectedProperty);
+interface AISuggestionsProps {
+  properties: Property[];
+  transactions: Transaction[];
+}
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'revenue_improvement': return TrendingUp;
-      case 'tax_saving': return DollarSign;
-      case 'maintenance': return Wrench;
-      case 'investment': return Target;
-      default: return Brain;
-    }
+const AISuggestions: React.FC<AISuggestionsProps> = ({ properties, transactions }) => {
+  const [selectedSuggestion, setSelectedSuggestion] = useState<AIRecommendation | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  // --- AIチャットUI用 state ---
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // データから統計を計算
+  const calculateStats = () => {
+    const recentTransactions = (transactions || []).filter((t: Transaction) => {
+      const transactionDate = new Date(t.date ?? '');
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      return transactionDate >= threeMonthsAgo;
+    });
+
+    const totalIncome = recentTransactions
+      .filter((t: Transaction) => t.type === 'income')
+      .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+    const totalExpenses = recentTransactions
+      .filter((t: Transaction) => t.type === 'expense')
+      .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+    const repairExpenses = recentTransactions
+      .filter((t: Transaction) => t.type === 'expense' && t.category.includes('修繕'))
+      .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+    const consumableExpenses = recentTransactions
+      .filter((t: Transaction) => t.type === 'expense' && (
+        t.category.includes('消耗') || 
+        t.category.includes('清掃') || 
+        t.category.includes('管理')
+      ))
+      .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+    return {
+      totalIncome,
+      totalExpenses,
+      repairExpenses,
+      consumableExpenses
+    };
   };
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'revenue_improvement': return '収益改善';
-      case 'tax_saving': return '節税対策';
-      case 'maintenance': return 'メンテナンス';
-      case 'investment': return '投資提案';
-      default: return 'その他';
-    }
+  const stats = calculateStats();
+
+  // ダミーのAI提案を生成
+  const generateAISuggestions = (): AIRecommendation[] => {
+    return [
+      {
+        id: '1',
+        property_id: '1',
+        type: 'maintenance',
+        title: '修繕費の最適化提案',
+        description: `直近の修繕費が${formatCurrency(stats.repairExpenses)}かかっています。費用対効果の高いリフォームを検討しましょう。`,
+        impact: 'high',
+        priority: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        estimated_savings: 50000,
+        implementation_cost: 200000,
+        timeline: '3ヶ月以内',
+        status: 'pending'
+      },
+      {
+        id: '2',
+        property_id: '2',
+        type: 'revenue_improvement',
+        title: '家賃収入の最適化',
+        description: `今月の家賃収入は${formatCurrency(stats.totalIncome)}でした。近隣物件の相場と比較し、家賃の見直しを検討できます。`,
+        impact: 'medium',
+        priority: 2,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        estimated_savings: 120000,
+        implementation_cost: 0,
+        timeline: '即座に実施可能',
+        status: 'pending'
+      },
+      {
+        id: '3',
+        property_id: '3',
+        type: 'tax_saving',
+        title: '確定申告の節税対策',
+        description: `消耗品費として計上できる項目が${formatCurrency(stats.consumableExpenses)}分見られます。確定申告時の節税効果を最大化するために、レシートを整理しましょう。`,
+        impact: 'high',
+        priority: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        estimated_savings: 25000,
+        implementation_cost: 0,
+        timeline: '1ヶ月以内',
+        status: 'pending'
+      },
+      {
+        id: '4',
+        property_id: '1',
+        type: 'investment',
+        title: 'エネルギー効率の改善',
+        description: '断熱改修により光熱費削減と家賃競争力向上が期待できます。投資回収期間は約3年と試算されます。',
+        impact: 'medium',
+        priority: 3,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        estimated_savings: 300000,
+        implementation_cost: 2000000,
+        timeline: '6ヶ月以内',
+        status: 'pending'
+      },
+      {
+        id: '5',
+        property_id: '2',
+        type: 'risk_management',
+        title: '保険見直しの提案',
+        description: '現在の火災保険の補償内容を確認し、適切な保険料に調整することで年間の支出削減が可能です。',
+        impact: 'medium',
+        priority: 2,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        estimated_savings: 15000,
+        implementation_cost: 0,
+        timeline: '2ヶ月以内',
+        status: 'pending'
+      }
+    ];
+  };
+
+  const suggestions = generateAISuggestions();
+
+  const handleSuggestionClick = (suggestion: AIRecommendation) => {
+    setSelectedSuggestion(suggestion);
+    setShowModal(true);
   };
 
   const getImpactColor = (impact: string) => {
     switch (impact) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'high':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-700 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
   const getImpactLabel = (impact: string) => {
     switch (impact) {
-      case 'high': return '重要度：高';
-      case 'medium': return '重要度：中';
-      case 'low': return '重要度：低';
-      default: return '重要度：不明';
+      case 'high':
+        return '重要';
+      case 'medium':
+        return '中程度';
+      case 'low':
+        return '低';
+      default:
+        return '不明';
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!chatMessage.trim()) return;
-
-    const userMessage = {
-      id: Date.now().toString(),
-      type: 'user' as const,
-      message: chatMessage,
-      timestamp: new Date()
-    };
-
-    setChatHistory(prev => [...prev, userMessage]);
-    setChatMessage('');
-
-    // AIの返答をシミュレート
-    setTimeout(() => {
-      const aiResponse = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai' as const,
-        message: generateAIResponse(chatMessage),
-        timestamp: new Date()
-      };
-      setChatHistory(prev => [...prev, aiResponse]);
-    }, 1000);
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'maintenance':
+        return <Wrench className="w-5 h-5" />;
+      case 'revenue_improvement':
+        return <TrendingUp className="w-5 h-5" />;
+      case 'tax_saving':
+        return <DollarSign className="w-5 h-5" />;
+      case 'investment':
+        return <Lightbulb className="w-5 h-5" />;
+      case 'risk_management':
+        return <AlertCircle className="w-5 h-5" />;
+      default:
+        return <Brain className="w-5 h-5" />;
+    }
   };
 
-  const generateAIResponse = (userMessage: string): string => {
-    const message = userMessage.toLowerCase();
-    
-    if (message.includes('家賃') || message.includes('収入')) {
-      return 'あなたの物件の家賃についてですが、現在の市場価格と比較すると、アパートAは5-8%程度の増額余地があります。近隣の類似物件の家賃相場を調査し、必要に応じて小規模なリノベーションを行うことで、家賃アップが期待できます。具体的には、水回りの改修や内装のリフレッシュが効果的です。';
+  // チャット送信ハンドラ
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const userMessage = chatInput.trim();
+    setChatHistory((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await fetch('/api/ai-advisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userMessage,
+          properties,
+          transactions,
+        }),
+      });
+      const data = await res.json();
+      setChatHistory((prev) => [...prev, { role: 'ai', content: data.answer || data.error || 'エラーが発生しました' }]);
+    } catch (err) {
+      setChatHistory((prev) => [...prev, { role: 'ai', content: 'サーバーエラーが発生しました' }]);
+    } finally {
+      setChatLoading(false);
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
-    
-    if (message.includes('税金') || message.includes('節税')) {
-      return '節税対策として、以下の点を検討してください：\n\n1）修繕費と資本的支出の適切な区分\n2）減価償却の最適化\n3）青色申告特別控除の活用\n\n特に今期は修繕費が多いため、適切な計上により税負担を軽減できます。領収書の整理も忘れずに行ってください。';
-    }
-    
-    if (message.includes('修繕') || message.includes('メンテナンス')) {
-      return '予防的メンテナンスは長期的な収益性向上に重要です。築年数を考慮すると、定期点検により大規模修繕を避けることができ、結果的にコストを抑制できます。年間予算の5-8%をメンテナンス費用として確保することをお勧めします。特に水回りと外壁の点検は重要です。';
-    }
-    
-    return 'ご質問いただきありがとうございます。より具体的なアドバイスのため、どの物件について、どのような観点でのご相談かお聞かせください。収益改善、節税対策、メンテナンス計画など、様々な角度からサポートさせていただきます。お気軽にご相談ください。';
   };
-
-  const suggestedQuestions = [
-    "家賃を上げるにはどうすればいいですか？",
-    "節税のためにできることはありますか？",
-    "物件のリフォームは必要ですか？",
-    "維持費を安くする方法はありますか？"
-  ];
 
   return (
-    <div className="space-y-8">
+    <div className="p-6 space-y-8">
       {/* ヘッダー */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 text-white">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-            <Brain className="w-7 h-7 text-white" />
-          </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center mb-4">
+          <Brain className="w-8 h-8 text-purple-600 mr-3" />
           <div>
-            <h2 className="text-2xl font-bold">AI投資アドバイザー</h2>
-            <p className="text-purple-100">あなたの不動産投資を最適化するための提案をします</p>
+            <h1 className="text-2xl font-bold text-gray-900">AI示唆・アドバイス</h1>
+            <p className="text-gray-600">あなたの不動産投資を最適化するためのAI提案</p>
           </div>
         </div>
-        <div className="flex items-center space-x-6 text-sm">
-          <div className="flex items-center">
-            <Lightbulb className="w-4 h-4 mr-2" />
-            {filteredRecommendations.length}件の提案があります
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="bg-purple-50 rounded-lg p-3">
+            <p className="text-purple-600 font-medium">総収入</p>
+            <p className="text-2xl font-bold text-purple-700">{formatCurrency(stats.totalIncome)}</p>
           </div>
-          <div className="flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2" />
-            収益改善の可能性を発見
+          <div className="bg-red-50 rounded-lg p-3">
+            <p className="text-red-600 font-medium">総支出</p>
+            <p className="text-2xl font-bold text-red-700">{formatCurrency(stats.totalExpenses)}</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-3">
+            <p className="text-green-600 font-medium">純利益</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(stats.totalIncome - stats.totalExpenses)}</p>
           </div>
         </div>
       </div>
 
-      {/* フィルター */}
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">提案を絞り込む</h3>
-            <p className="text-gray-500 text-sm">特定の物件の提案だけを見ることができます</p>
-          </div>
-          <select 
-            value={selectedProperty}
-            onChange={(e) => setSelectedProperty(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-          >
-            <option value="all">すべての物件</option>
-            {mockProperties.map(property => (
-              <option key={property.id} value={property.id}>{property.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* 提案一覧 */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold text-gray-900">AIからの提案</h3>
-            <span className="text-sm text-gray-500">{filteredRecommendations.length}件の提案</span>
-          </div>
-          
-          {filteredRecommendations.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100 text-center">
-              <Brain className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h4 className="text-lg font-medium text-gray-900 mb-2">提案がありません</h4>
-              <p className="text-gray-500 text-sm">選択した物件には現在提案がありません。</p>
-            </div>
-          ) : (
-            filteredRecommendations.map((recommendation) => {
-              const Icon = getIcon(recommendation.type);
-              const property = mockProperties.find(p => p.id === recommendation.property_id);
-              
-              return (
-                <div key={recommendation.id} className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{recommendation.title}</h4>
-                        <p className="text-sm text-gray-500">{property?.name}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getImpactColor(recommendation.impact)}`}>
-                        {getImpactLabel(recommendation.impact)}
-                      </span>
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
-                        {getTypeLabel(recommendation.type)}
-                      </span>
-                    </div>
+      {/* AI提案一覧 */}
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-gray-900">推奨事項 ({suggestions.length}件)</h2>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {suggestions.map((suggestion) => (
+            <div
+              key={suggestion.id}
+              onClick={() => handleSuggestionClick(suggestion)}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-purple-300 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                    {getTypeIcon(suggestion.type)}
                   </div>
-                  
-                  <p className="text-gray-700 mb-4 leading-relaxed">{recommendation.description}</p>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">
-                      {new Date(recommendation.created_at).toLocaleDateString('ja-JP')}
+                  <div>
+                    <h3 className="font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">
+                      {suggestion.title}
+                    </h3>
+                    <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getImpactColor(suggestion.impact)}`}>
+                      {getImpactLabel(suggestion.impact)}
                     </span>
-                    <button className="flex items-center text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors">
-                      詳しく見る
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </button>
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* AI相談チャット */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col" style={{ height: '700px' }}>
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Brain className="w-6 h-6 text-white" />
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" />
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">AI相談チャット</h3>
-                <p className="text-sm text-gray-500">不動産投資について何でもお聞きください</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
-            {chatHistory.length === 0 ? (
-              <div className="text-center mt-8">
-                <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-8 h-8 text-blue-600" />
-                </div>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">AIに相談してみましょう</h4>
-                <p className="text-sm text-gray-500 mb-6">
-                  不動産投資の疑問や悩みを気軽にご相談ください。<br />
-                  家賃設定、節税対策、物件管理など、なんでもお答えします。
-                </p>
-                
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">よくある質問</p>
-                  {suggestedQuestions.map((question, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setChatMessage(question)}
-                      className="block w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {chatHistory.map((chat) => (
-                  <div key={chat.id} className={`flex ${chat.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
-                      chat.type === 'user' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      <p className="text-sm leading-relaxed whitespace-pre-line">{chat.message}</p>
-                      <p className={`text-xs mt-2 ${
-                        chat.type === 'user' ? 'text-blue-100' : 'text-gray-500'
-                      }`}>
-                        {chat.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+              
+              <p className="text-gray-600 mb-4 line-clamp-3">
+                {suggestion.description}
+              </p>
+              
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center space-x-4">
+                  {suggestion.estimated_savings && (
+                    <div className="flex items-center">
+                      <DollarSign className="w-4 h-4 text-green-600 mr-1" />
+                      <span className="text-green-600 font-medium">
+                        節約: {formatCurrency(suggestion.estimated_savings)}
+                      </span>
                     </div>
+                  )}
+                  <div className="flex items-center">
+                    <Clock className="w-4 h-4 text-gray-400 mr-1" />
+                    <span className="text-gray-500">{suggestion.timeline}</span>
                   </div>
-                ))}
+                </div>
+                <div className="flex items-center">
+                  <span className="text-xs text-gray-400">優先度 {suggestion.priority}</span>
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="p-6 border-t border-gray-100">
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="不動産投資について質問してください..."
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!chatMessage.trim()}
-                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Send className="w-5 h-5" />
-              </button>
             </div>
-            <p className="text-xs text-gray-400 mt-2 flex items-center">
-              <Info className="w-3 h-3 mr-1" />
-              AIの回答は参考情報です。重要な判断は専門家にご相談ください。
-            </p>
-          </div>
+          ))}
         </div>
       </div>
+
+      {/* --- AIチャットUI --- */}
+      <div className="bg-white rounded-lg shadow p-6 mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <Brain className="w-6 h-6 text-purple-600 mr-2" />AIチャット相談
+        </h2>
+        <div className="h-64 overflow-y-auto bg-gray-50 rounded-lg p-4 mb-4 flex flex-col space-y-2" style={{ maxHeight: 320 }}>
+          {chatHistory.length === 0 && (
+            <div className="text-gray-400 text-sm">AIに自由に質問できます。例:「今月の家賃収入は？」「節税のコツは？」</div>
+          )}
+          {chatHistory.map((msg, idx) => (
+            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`px-4 py-2 rounded-lg max-w-[80%] text-sm whitespace-pre-line ${msg.role === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-900'}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+        <form onSubmit={handleChatSubmit} className="flex items-center space-x-2">
+          <input
+            type="text"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            placeholder="AIに質問する..."
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            disabled={chatLoading}
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            disabled={chatLoading || !chatInput.trim()}
+          >
+            送信
+          </button>
+        </form>
+        {chatLoading && <div className="text-xs text-gray-400 mt-2">AIが考え中...</div>}
+      </div>
+      {/* --- 既存のAI提案UI --- */}
+      {/* 詳細モーダル */}
+      {showModal && selectedSuggestion && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    {getTypeIcon(selectedSuggestion.type)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{selectedSuggestion.title}</h3>
+                    <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getImpactColor(selectedSuggestion.impact)}`}>
+                      {getImpactLabel(selectedSuggestion.impact)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">提案内容</h4>
+                <p className="text-gray-600">{selectedSuggestion.description}</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedSuggestion.estimated_savings && (
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h5 className="font-medium text-green-800 mb-1">予想節約額</h5>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(selectedSuggestion.estimated_savings)}
+                    </p>
+                  </div>
+                )}
+                
+                {selectedSuggestion.implementation_cost && (
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h5 className="font-medium text-blue-800 mb-1">実装コスト</h5>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(selectedSuggestion.implementation_cost)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-600">{selectedSuggestion.timeline}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-600">優先度 {selectedSuggestion.priority}</span>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                    後で検討
+                  </button>
+                  <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    実装する
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

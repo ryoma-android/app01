@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
 import { TrendingUp, Download, Calendar, Filter } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
-import { mockProperties, generatePropertyFinancials } from '../utils/mockData';
+import { generatePropertyFinancials } from '../utils/mockData';
+import { Property, Transaction } from '../types';
 
-const Analytics: React.FC = () => {
+interface AnalyticsProps {
+  properties?: Property[];
+  transactions?: Transaction[];
+}
+
+const Analytics: React.FC<AnalyticsProps> = ({
+  properties = [],
+  transactions = [],
+}) => {
   const [selectedPeriod, setSelectedPeriod] = useState('12months');
   const [selectedProperty, setSelectedProperty] = useState('all');
 
-  const propertyFinancials = mockProperties.map(generatePropertyFinancials);
+  const propertyFinancials = properties.length > 0 && transactions.length > 0
+    ? properties.map(property => generatePropertyFinancials(property, transactions))
+    : [];
 
   // Generate mock time series data
   const generateTimeSeriesData = () => {
@@ -65,7 +76,7 @@ const Analytics: React.FC = () => {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">すべての物件</option>
-            {mockProperties.map(property => (
+            {properties.map(property => (
               <option key={property.id} value={property.id}>{property.name}</option>
             ))}
           </select>

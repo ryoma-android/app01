@@ -243,6 +243,62 @@ export interface Database {
           updated_at?: string
         }
       }
+      documents: {
+        Row: {
+          id: string
+          user_id: string
+          property_id?: string | null
+          transaction_id?: string | null
+          name: string
+          type: 'receipt' | 'contract' | 'tax_document' | 'insurance' | 'depreciation_schedule' | 'other'
+          file_url?: string | null
+          file_size?: number | null
+          mime_type?: string | null
+          description?: string | null
+          ocr_text?: string | null
+          is_reconciled_with_transaction?: boolean | null
+          tax_year?: number | null
+          document_category?: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          property_id?: string | null
+          transaction_id?: string | null
+          name: string
+          type: 'receipt' | 'contract' | 'tax_document' | 'insurance' | 'depreciation_schedule' | 'other'
+          file_url?: string | null
+          file_size?: number | null
+          mime_type?: string | null
+          description?: string | null
+          ocr_text?: string | null
+          is_reconciled_with_transaction?: boolean | null
+          tax_year?: number | null
+          document_category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          property_id?: string | null
+          transaction_id?: string | null
+          name?: string
+          type?: 'receipt' | 'contract' | 'tax_document' | 'insurance' | 'depreciation_schedule' | 'other'
+          file_url?: string | null
+          file_size?: number | null
+          mime_type?: string | null
+          description?: string | null
+          ocr_text?: string | null
+          is_reconciled_with_transaction?: boolean | null
+          tax_year?: number | null
+          document_category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

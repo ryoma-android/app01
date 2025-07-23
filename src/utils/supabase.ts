@@ -27,6 +27,11 @@ export const createQueryHelper = () => {
     transactionsByUserId: (userId: string) => 
       supabase.from('transactions').select('*').eq('user_id', userId),
     
+    // 口座関連
+    accounts: () => supabase.from('accounts').select('*'),
+    accountsByUserId: (userId: string) => 
+      supabase.from('accounts').select('*').eq('user_id', userId),
+
     // AI推奨事項関連
     recommendations: () => supabase.from('ai_recommendations').select('*'),
     recommendationsByPropertyId: (propertyId: string) => 

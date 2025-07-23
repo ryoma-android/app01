@@ -1,101 +1,96 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import Link from 'next/link';
+import { supabase } from "../../../utils/supabase";
+import { useState } from "react";
+import { useRouter } from 'next/navigation';
 
-const ResetPasswordPage: React.FC = () => {
-  const { resetPassword, loading, error, success } = useAuth();
-  const [email, setEmail] = useState('');
+export default function PasswordReset() {
+  const router = useRouter();
+  const [password, setPassword] = useState("");
+  const [passwordConf, setPasswordConf] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await resetPassword(email);
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    // e.preventDefault();
+    setError(null);
+
+    if (!password || !passwordConf) {
+      setError("すべてのフィールドを入力してください");
+      return;
+    }
+    if (password !== passwordConf) {
+      setError("パスワードが一致しません");
+      return;
+    }
+    if (password.length < 6) {
+      setError("パスワードは6文字以上で入力してください");
+      return;
+    }
+
+    try {
+      const { error: passwordResetError } = await supabase.auth.updateUser({
+        password
+      });
+      if (passwordResetError) {
+        throw passwordResetError;
+      }
+      alert('パスワード変更が完了しました');
+      await router.push("/auth");
+    } catch (error) {
+      setError('エラーが発生しました');
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="mx-auto h-12 w-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-            <Mail className="h-8 w-8 text-white" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100 py-12 px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        <div className="flex flex-col items-center">
+          <div className="h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center mb-2">
+            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            パスワードリセット
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            登録したメールアドレスを入力してください
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">パスワード再登録</h2>
+          <p className="text-gray-500 text-sm">新しいパスワードを入力してください</p>
         </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form onSubmit={onSubmit} className="space-y-5">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-red-500" />
-              <span className="text-red-700 text-sm">{error}</span>
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-2 text-sm flex items-center">
+              <svg className="w-5 h-5 mr-2 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-1.414 1.414A9 9 0 105.636 18.364l1.414-1.414M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              {error}
             </div>
           )}
-          
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-2">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className="text-green-700 text-sm">{success}</span>
-            </div>
-          )}
-
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              メールアドレス
-            </label>
-            <div className="mt-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                placeholder="example@email.com"
-              />
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 bg-gray-50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400 transition-colors"
+              placeholder="新しいパスワード"
+            />
           </div>
-
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            >
-              {loading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  送信中...
-                </div>
-              ) : (
-                'リセットメールを送信'
-              )}
-            </button>
+            <label className="block text-sm font-medium text-gray-700 mb-1">パスワード（確認）</label>
+            <input
+              type="password"
+              required
+              value={passwordConf}
+              onChange={e => setPasswordConf(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 bg-gray-50 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder-gray-400 transition-colors"
+              placeholder="新しいパスワード（確認）"
+            />
           </div>
-
-          <div className="text-center">
-            <Link
-              href="/auth"
-              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              ログインページに戻る
-            </Link>
-          </div>
+          <button
+            type="submit"
+            className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg shadow-md hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
+          >
+            パスワード変更
+          </button>
         </form>
       </div>
     </div>
   );
-};
+}
 
-export default ResetPasswordPage; 

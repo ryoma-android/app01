@@ -44,6 +44,7 @@ export interface Property {
   building_year?: number;
   floors?: number;
   rooms?: number;
+  description?: string;
 }
 
 export interface Transaction {
@@ -181,4 +182,5 @@ export interface AuthContextType {
   signUp: (credentials: SignUpCredentials) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }

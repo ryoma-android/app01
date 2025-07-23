@@ -1,28 +1,56 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { Property, Transaction, Account } from '../types';
 import { supabase, createQueryHelper } from '../utils/supabase';
-import { Plus, CreditCard, Building, AlertCircle, CheckCircle, Loader2, BarChart3, Home } from 'lucide-react';
+import { Plus, Building, AlertCircle, CheckCircle, Loader2, Home, X, Filter, Search, ArrowUp, ArrowDown, RotateCcw, Trash2, Edit } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import PropertyChart from './PropertyChart';
-import { formatCurrency, formatDate } from '../utils/mockData';
+import { formatCurrency, formatDate } from '../utils/format';
+import { Transition } from '@headlessui/react';
 
-const PropertyManagement: React.FC = () => {
+interface PropertyManagementProps {
+  properties: Property[];
+  setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
+  onPropertyAdded: (newProperty: Property) => void;
+}
+
+const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, setProperties, onPropertyAdded }) => {
   const { user } = useAuth();
-  const [properties, setProperties] = useState<Property[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  
+  const [propertyFilter, setPropertyFilter] = useState('');
+  const [sortKey, setSortKey] = useState<'name' | 'purchase_date' | 'monthly_rent' | 'purchase_price'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isFilterVisible, setIsFilterVisible] = useState(false);
+  
+  const [filterType, setFilterType] = useState('');
+  const [filterRentMin, setFilterRentMin] = useState('');
+  const [filterRentMax, setFilterRentMax] = useState('');
+  const [filterPriceMin, setFilterPriceMin] = useState('');
+  const [filterPriceMax, setFilterPriceMax] = useState('');
+  const [filterDateStart, setFilterDateStart] = useState('');
+  const [filterDateEnd, setFilterDateEnd] = useState('');
 
-  // 物件追加フォーム状態
+  const handleFilterReset = () => {
+    setPropertyFilter('');
+    setFilterType('');
+    setFilterRentMin('');
+    setFilterRentMax('');
+    setFilterPriceMin('');
+    setFilterPriceMax('');
+    setFilterDateStart('');
+    setFilterDateEnd('');
+    setIsFilterVisible(false);
+  };
+
   const [propertyFormData, setPropertyFormData] = useState({
     name: '',
     address: '',
-    property_type: 'apartment' as 'apartment' | 'house' | 'commercial',
+    property_type: 'apartment' as Property['property_type'],
     purchase_price: '',
     current_value: '',
     monthly_rent: '',
@@ -30,8 +58,7 @@ const PropertyManagement: React.FC = () => {
     description: ''
   });
 
-  // 取引追加フォーム状態
-  const [formData, setFormData] = useState({
+  const [transactionFormData, setTransactionFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     description: '',
     amount: '',
@@ -41,214 +68,114 @@ const PropertyManagement: React.FC = () => {
     account_id: ''
   });
 
-  // データ読み込み
+  const [modalProperty, setModalProperty] = useState<Property | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editForm, setEditForm] = useState<Property | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const propertyTypeOptions = [
+    { value: 'apartment', label: 'マンション' },
+    { value: 'house', label: '一戸建て' },
+    { value: 'commercial', label: '商業物件' },
+    { value: 'land', label: '土地' },
+  ];
+
   useEffect(() => {
-    loadProperties();
-    loadTransactions();
+    loadData();
   }, []);
+  
+  const loadData = async () => {
+    setLoading(true);
+    await Promise.all([
+      loadProperties(),
+      loadTransactions(),
+      loadAccounts()
+    ]);
+    setLoading(false);
+  };
+
+  const queryHelper = createQueryHelper();
 
   const loadProperties = async () => {
-    try {
-      setLoading(true);
-      const queryHelper = createQueryHelper();
-      const { data, error } = await queryHelper.properties();
-      
-      if (error) {
-        console.error('物件データの読み込みエラー:', error);
-        setErrorMessage('物件データの読み込みに失敗しました');
-        return;
-      }
-
-      console.log('読み込まれた物件データ:', data);
-      if (data) {
-        setProperties(data);
-      }
-    } catch (error) {
-      console.error('物件データの読み込みエラー:', error);
-      setErrorMessage('物件データの読み込みに失敗しました');
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await queryHelper.properties();
+    if (error) setErrorMessage('物件データの読み込みに失敗しました');
+    else if (data) setProperties(data);
   };
-
+  
   const loadTransactions = async () => {
-    try {
-      setLoading(true);
-      const queryHelper = createQueryHelper();
-      const { data, error } = await queryHelper.transactions();
-      
-      if (error) {
-        console.error('取引データの読み込みエラー:', error);
-        setErrorMessage('取引データの読み込みに失敗しました');
-        return;
-      }
+    const { data, error } = await queryHelper.transactions();
+    if (error) setErrorMessage('取引データの読み込みに失敗しました');
+    else if (data) setTransactions(data);
+  };
 
-      console.log('読み込まれた取引データ:', data);
-      if (data) {
-        setTransactions(data);
-      }
-    } catch (error) {
-      console.error('取引データの読み込みエラー:', error);
-      setErrorMessage('取引データの読み込みに失敗しました');
-    } finally {
-      setLoading(false);
+  const loadAccounts = async () => {
+    const { data, error } = await queryHelper.accounts();
+    if (error) setErrorMessage('口座データの読み込みに失敗しました');
+    else if (data) setAccounts(data);
+  };
+
+  const handleApiResponse = (error: any | null, successMsg: string, errorMsg: string) => {
+    if (error) {
+      console.error(errorMsg, error);
+      setErrorMessage(`${errorMsg}: ${error.message}`);
+    } else {
+      setSuccessMessage(successMsg);
+      setTimeout(() => setSuccessMessage(''), 3000);
     }
   };
 
-  // 物件追加処理
   const handlePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!propertyFormData.name || !propertyFormData.address || !propertyFormData.purchase_date) {
       setErrorMessage('物件名、住所、購入日は必須です');
       return;
     }
-
-    try {
-      setLoading(true);
-      setErrorMessage('');
-      setSuccessMessage('');
-
-      const newProperty = {
-        name: propertyFormData.name,
-        address: propertyFormData.address,
-        property_type: propertyFormData.property_type,
-        purchase_price: propertyFormData.purchase_price ? parseFloat(propertyFormData.purchase_price) * 10000 : 0, // 万円から円に変換
-        current_value: propertyFormData.current_value ? parseFloat(propertyFormData.current_value) * 10000 : null, // 万円から円に変換
-        monthly_rent: propertyFormData.monthly_rent ? parseFloat(propertyFormData.monthly_rent) : null,
-        purchase_date: propertyFormData.purchase_date,
-        owner_id: user?.id || 'user1' // 認証済みユーザーのIDを使用
-      };
-
-      console.log('保存する物件データ:', newProperty);
-      
-      const { data, error } = await supabase
-        .from('properties')
-        .insert([newProperty])
-        .select();
-
-      if (error) {
-        console.error('物件データの保存エラー:', error);
-        console.error('エラー詳細:', error.message, error.details, error.hint);
-        setErrorMessage(`物件データの保存に失敗しました: ${error.message}`);
-        return;
-      }
-
-      console.log('保存成功:', data);
-
-      setSuccessMessage('物件が正常に追加されました');
-      
-      // フォームをリセット
-      setPropertyFormData({
-        name: '',
-        address: '',
-        property_type: 'apartment',
-        purchase_price: '',
-        current_value: '',
-        monthly_rent: '',
-        purchase_date: new Date().toISOString().split('T')[0],
-        description: ''
-      });
-
-      // 物件リストを再読み込み
-      await loadProperties();
-      
-      // 新しく追加された物件を選択状態にする
-      if (data && data.length > 0) {
-        const newProperty = data[0];
-        setSelectedPropertyId(newProperty.id);
-        
-        // 新しく追加された物件のサンプル取引データを生成
-        // const sampleTransactions = [
-        //   {
-        //     property_id: newProperty.id,
-        //     type: 'income' as const,
-        //     category: '家賃収入',
-        //     amount: newProperty.monthly_rent || 100000,
-        //     description: `${newProperty.name} - 初回家賃収入`,
-        //     transaction_date: new Date().toISOString().split('T')[0],
-        //     account_id: accounts.length > 0 ? accounts[0].id : null,
-        //     is_manual_entry: true,
-        //     user_id: user?.id || 'user1'
-        //   },
-        //   {
-        //     property_id: newProperty.id,
-        //     type: 'expense' as const,
-        //     category: '管理費',
-        //     amount: Math.floor((newProperty.monthly_rent || 100000) * 0.1), // 家賃の10%
-        //     description: `${newProperty.name} - 管理費`,
-        //     transaction_date: new Date().toISOString().split('T')[0],
-        //     account_id: accounts.length > 0 ? accounts[0].id : null,
-        //     is_manual_entry: true,
-        //     user_id: user?.id || 'user1'
-        //   }
-        // ];
-
-        // サンプル取引データを保存
-        // const { error: transactionError } = await supabase
-        //   .from('transactions')
-        //   .insert(sampleTransactions);
-
-        // if (transactionError) {
-        //   console.error('サンプル取引データの保存エラー:', transactionError);
-        // } else {
-        //   console.log('サンプル取引データを保存しました');
-        //   // 取引リストを再読み込み
-        //   await loadTransactions();
-        //   setSuccessMessage('物件が正常に追加されました。サンプル取引データも自動生成されました。');
-        // }
-      }
-
-    } catch (error) {
-      console.error('物件データの保存エラー:', error);
-      setErrorMessage('物件データの保存に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 取引追加処理
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    setLoading(true);
     
-    if (!formData.property_id || !formData.description || !formData.amount || !formData.category) {
+    const newPropertyData = {
+      ...propertyFormData,
+      purchase_price: propertyFormData.purchase_price ? parseFloat(propertyFormData.purchase_price) * 10000 : 0,
+      current_value: propertyFormData.current_value ? parseFloat(propertyFormData.current_value) * 10000 : null,
+      monthly_rent: propertyFormData.monthly_rent ? parseFloat(propertyFormData.monthly_rent) : null,
+      owner_id: user?.id,
+    };
+    
+    const { data, error } = await supabase.from('properties').insert([newPropertyData]).select();
+    handleApiResponse(error, '物件が正常に追加されました', '物件の追加に失敗しました');
+    
+    if (!error && data) {
+      setPropertyFormData({ name: '', address: '', property_type: 'apartment', purchase_price: '', current_value: '', monthly_rent: '', purchase_date: new Date().toISOString().split('T')[0], description: '' });
+      await loadProperties();
+      onPropertyAdded(data[0]);
+    }
+    setLoading(false);
+  };
+  
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transactionFormData.property_id || !transactionFormData.description || !transactionFormData.amount || !transactionFormData.category) {
       setErrorMessage('必須項目を入力してください');
       return;
     }
+    setLoading(true);
 
-    try {
-      setLoading(true);
-      setErrorMessage('');
-      setSuccessMessage('');
+    const newTransaction = {
+      property_id: transactionFormData.property_id,
+      type: transactionFormData.type,
+      category: transactionFormData.category,
+      amount: parseFloat(transactionFormData.amount),
+      description: transactionFormData.description,
+      transaction_date: transactionFormData.date,
+      account_id: transactionFormData.account_id || null,
+      is_manual_entry: true,
+      user_id: user?.id
+    };
 
-      const newTransaction = {
-        property_id: formData.property_id,
-        type: formData.type,
-        category: formData.category,
-        amount: parseFloat(formData.amount),
-        description: formData.description,
-        transaction_date: formData.date,
-        account_id: formData.account_id || null,
-        is_manual_entry: true,
-        user_id: user?.id || 'user1' // 認証済みユーザーのIDを使用
-      };
-
-      const { data, error } = await supabase
-        .from('transactions')
-        .insert([newTransaction])
-        .select();
-
-      if (error) {
-        console.error('取引データの保存エラー:', error);
-        console.error('エラー詳細:', error.message, error.details, error.hint);
-        setErrorMessage(`取引データの保存に失敗しました: ${error.message}`);
-        return;
-      }
-
-      setSuccessMessage('取引データが正常に保存されました');
-      
-      // フォームをリセット
-      setFormData({
+    const { error } = await supabase.from('transactions').insert([newTransaction]);
+    handleApiResponse(error, '取引データが正常に保存されました', '取引データの保存に失敗しました');
+    
+    if (!error) {
+      setTransactionFormData({
         date: new Date().toISOString().split('T')[0],
         description: '',
         amount: '',
@@ -257,551 +184,305 @@ const PropertyManagement: React.FC = () => {
         property_id: '',
         account_id: ''
       });
-
-      // 取引リストを再読み込み
       await loadTransactions();
-
-    } catch (error) {
-      console.error('取引データの保存エラー:', error);
-      setErrorMessage('取引データの保存に失敗しました');
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
-  // 銀行・クレカ連携の模擬処理
-  const handleBankSync = async () => {
-    try {
-      setLoading(true);
-      setErrorMessage('');
-      setSuccessMessage('');
-
-      // 模擬データの生成（実際のAPI連携は次のフェーズで実装）
-      // const mockBankTransactions = [
-      //   {
-      //     property_id: '1',
-      //     type: 'income' as const,
-      //     category: '家賃収入',
-      //     amount: 120000,
-      //     description: '4月分家賃（銀行連携）',
-      //     transaction_date: new Date().toISOString().split('T')[0],
-      //     account_id: '1',
-      //     is_manual_entry: false,
-      //     user_id: user?.id || 'user1'
-      //   },
-      //   {
-      //     property_id: '2',
-      //     type: 'expense' as const,
-      //     category: '管理費',
-      //     amount: 15000,
-      //     description: '共益費（銀行連携）',
-      //     transaction_date: new Date().toISOString().split('T')[0],
-      //     account_id: '1',
-      //     is_manual_entry: false,
-      //     user_id: user?.id || 'user1'
-      //   },
-      //   {
-      //     property_id: '3',
-      //     type: 'expense' as const,
-      //     category: '修繕費',
-      //     amount: 35000,
-      //     description: 'エアコン修理（銀行連携）',
-      //     transaction_date: new Date().toISOString().split('T')[0],
-      //     account_id: '1',
-      //     is_manual_entry: false,
-      //     user_id: user?.id || 'user1'
-      //   }
-      // ];
-
-      // const { data, error } = await supabase
-      //   .from('transactions')
-      //   .insert(mockBankTransactions)
-      //   .select();
-
-      // if (error) {
-      //   console.error('銀行連携データの保存エラー:', error);
-      //   setErrorMessage('銀行連携データの保存に失敗しました');
-      //   return;
-      // }
-
-      // setSuccessMessage('銀行連携データが正常に保存されました（模擬データ）');
-      
-      // 取引リストを再読み込み
-      // await loadTransactions();
-
-    } catch (error) {
-      console.error('銀行連携データの保存エラー:', error);
-      setErrorMessage('銀行連携データの保存に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // フォーム入力ハンドラー
   const handlePropertyInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setPropertyFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setPropertyFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setTransactionFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // フィルタされた取引データを取得
-  const getFilteredTransactions = () => {
-    if (!selectedPropertyId) {
-      return transactions;
+  const filteredProperties = properties.filter(p => {
+    if (propertyFilter.trim() && !(p.name.toLowerCase().includes(propertyFilter.toLowerCase()) || p.address.toLowerCase().includes(propertyFilter.toLowerCase()))) return false;
+    if (filterType && p.property_type !== filterType) return false;
+    if (filterRentMin && (!p.monthly_rent || p.monthly_rent < Number(filterRentMin))) return false;
+    if (filterRentMax && (!p.monthly_rent || p.monthly_rent > Number(filterRentMax))) return false;
+    if (filterPriceMin && (!p.purchase_price || p.purchase_price < Number(filterPriceMin))) return false;
+    if (filterPriceMax && (!p.purchase_price || p.purchase_price > Number(filterPriceMax))) return false;
+    if (filterDateStart && (!p.purchase_date || new Date(p.purchase_date) < new Date(filterDateStart))) return false;
+    if (filterDateEnd && (!p.purchase_date || new Date(p.purchase_date) > new Date(filterDateEnd))) return false;
+    return true;
+  });
+
+  const sortedProperties = [...filteredProperties].sort((a, b) => {
+    let aValue: any = a[sortKey] ?? '';
+    let bValue: any = b[sortKey] ?? '';
+    if (sortKey === 'purchase_date') {
+      aValue = aValue ? new Date(aValue) : new Date(0);
+      bValue = bValue ? new Date(bValue) : new Date(0);
     }
-    return transactions.filter(transaction => transaction.property_id === selectedPropertyId);
+    if (sortKey === 'monthly_rent' || sortKey === 'purchase_price') {
+      aValue = aValue ? Number(aValue) : 0;
+      bValue = bValue ? Number(bValue) : 0;
+    }
+    if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const openPropertyModal = (property: Property) => {
+    setModalProperty(property);
+    setIsEditMode(false);
+    setEditForm(null);
+  };
+  const closePropertyModal = () => setModalProperty(null);
+  
+  const handleEditClick = () => {
+    if (modalProperty) {
+      setIsEditMode(true);
+      setEditForm({ ...modalProperty });
+    }
+  };
+  
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditForm(prev => prev ? { ...prev, [name]: value } : null);
   };
 
-  // グラフデータの計算
-  const getChartData = () => {
-    const filteredTransactions = getFilteredTransactions();
-    console.log('フィルタされた取引データ:', filteredTransactions);
-    
-    const monthlyData: { [key: string]: { income: number; expense: number } } = {};
-    
-    filteredTransactions.forEach(transaction => {
-      const date = new Date(transaction.transaction_date || transaction.date || new Date().toISOString());
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { income: 0, expense: 0 };
-      }
-      
-      if (transaction.type === 'income') {
-        monthlyData[monthKey].income += transaction.amount;
-      } else {
-        monthlyData[monthKey].expense += transaction.amount;
-      }
-    });
-
-    const result = Object.entries(monthlyData)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => ({
-        month,
-        income: data.income,
-        expense: data.expense,
-        profit: data.income - data.expense
-      }));
-    
-    console.log('グラフデータ:', result);
-    return result;
+  const handleEditSave = async () => {
+    if (!editForm) return;
+    setLoading(true);
+    const { id, created_at, updated_at, owner_id, ...updateData } = editForm;
+    const { error } = await supabase.from('properties').update(updateData).eq('id', id);
+    handleApiResponse(error, '物件情報を更新しました', '物件の更新に失敗しました');
+    if (!error) {
+      await loadProperties();
+      setModalProperty({ ...editForm });
+      setIsEditMode(false);
+    }
+    setLoading(false);
   };
-
-  const chartData = getChartData();
+  
+  const handleDeleteProperty = async () => {
+    if (!modalProperty || !window.confirm('本当にこの物件を削除しますか？関連する取引も全て削除されます。')) return;
+    setDeleteLoading(true);
+    const { error } = await supabase.from('properties').delete().eq('id', modalProperty.id);
+    handleApiResponse(error, '物件を削除しました', '物件の削除に失敗しました');
+    if (!error) {
+      await loadData();
+      closePropertyModal();
+    }
+    setDeleteLoading(false);
+  };
+  
+  const formInputClass = "w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 transition duration-150 ease-in-out focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500";
+  const btnClass = "inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-150 disabled:cursor-not-allowed";
+  const btnPrimaryClass = `${btnClass} bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 disabled:bg-blue-400 disabled:opacity-75`;
+  const btnSecondaryClass = `${btnClass} bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400 disabled:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus:ring-gray-500`;
+  const btnIconClass = "inline-flex items-center justify-center p-2.5 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 transition dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700";
 
   return (
-    <div className="p-6 space-y-8">
-      {/* ヘッダー */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">物件・取引管理</h1>
-        <p className="text-gray-600">物件情報と取引データの管理</p>
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">物件・取引管理</h1>
+        <p className="text-gray-600 mt-1">物件情報の登録とそれに関連する取引データを管理します。</p>
       </div>
+      
+      {successMessage && <div className="bg-green-100 text-green-800 p-4 rounded-lg flex items-center gap-2"><CheckCircle className="w-5 h-5" />{successMessage}</div>}
+      {errorMessage && <div className="bg-red-100 text-red-800 p-4 rounded-lg flex items-center gap-2"><AlertCircle className="w-5 h-5" />{errorMessage}</div>}
 
-      {/* 成功・エラーメッセージ */}
-      {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-            <p className="text-green-800">{successMessage}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Property Add Form */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 self-start">
+          <div className="p-6 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Home className="w-5 h-5 text-blue-500" />
+              新規物件追加
+            </h2>
           </div>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-            <p className="text-red-800">{errorMessage}</p>
-          </div>
-        </div>
-      )}
-
-      {/* 物件追加フォーム */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Home className="w-5 h-5 mr-2" />
-            物件追加
-          </h2>
-        </div>
-        <div className="p-6">
-          <form onSubmit={handlePropertySubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 物件名 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  物件名 *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={propertyFormData.name}
-                  onChange={handlePropertyInputChange}
-                  placeholder="例: マンションA-101号室"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                />
+          <form onSubmit={handlePropertySubmit} className="p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">物件名 *</label>
+                <input type="text" name="name" value={propertyFormData.name} onChange={handlePropertyInputChange} placeholder="例: シティタワー中目黒 101号室" className={formInputClass} required />
               </div>
-
-              {/* 住所 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  住所 *
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={propertyFormData.address}
-                  onChange={handlePropertyInputChange}
-                  placeholder="例: 東京都渋谷区..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                />
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">住所 *</label>
+                <input type="text" name="address" value={propertyFormData.address} onChange={handlePropertyInputChange} placeholder="例: 東京都目黒区上目黒1-1-1" className={formInputClass} required />
               </div>
-
-              {/* 物件タイプ */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  物件タイプ
-                </label>
-                <select
-                  name="property_type"
-                  value={propertyFormData.property_type}
-                  onChange={handlePropertyInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                >
-                  <option value="apartment">マンション</option>
-                  <option value="house">一戸建て</option>
-                  <option value="commercial">商業物件</option>
+                <label className="block text-sm font-medium text-gray-700 mb-1">物件タイプ</label>
+                <select name="property_type" value={propertyFormData.property_type} onChange={handlePropertyInputChange} className={formInputClass}>
+                  {propertyTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
               </div>
-
-              {/* 購入価格 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  購入価格（万円）
-                </label>
-                <input
-                  type="number"
-                  name="purchase_price"
-                  value={propertyFormData.purchase_price}
-                  onChange={handlePropertyInputChange}
-                  placeholder="例: 3000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                />
+               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">購入日 *</label>
+                <input type="date" name="purchase_date" value={propertyFormData.purchase_date} onChange={handlePropertyInputChange} className={formInputClass} required />
               </div>
-
-              {/* 現在価値 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  現在価値（万円）
-                </label>
-                <input
-                  type="number"
-                  name="current_value"
-                  value={propertyFormData.current_value}
-                  onChange={handlePropertyInputChange}
-                  placeholder="例: 3500"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">購入価格 (万円)</label>
+                <input type="number" name="purchase_price" value={propertyFormData.purchase_price} onChange={handlePropertyInputChange} placeholder="例: 5000" className={formInputClass} />
               </div>
-
-              {/* 月額家賃 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  月額家賃（円）
-                </label>
-                <input
-                  type="number"
-                  name="monthly_rent"
-                  value={propertyFormData.monthly_rent}
-                  onChange={handlePropertyInputChange}
-                  placeholder="例: 120000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                />
-              </div>
-
-              {/* 購入日 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  購入日
-                </label>
-                <input
-                  type="date"
-                  name="purchase_date"
-                  value={propertyFormData.purchase_date}
-                  onChange={handlePropertyInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">月額家賃 (円)</label>
+                <input type="number" name="monthly_rent" value={propertyFormData.monthly_rent} onChange={handlePropertyInputChange} placeholder="例: 150000" className={formInputClass} />
               </div>
             </div>
-
-            {/* 説明 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                説明
-              </label>
-              <textarea
-                name="description"
-                value={propertyFormData.description}
-                onChange={handlePropertyInputChange}
-                rows={3}
-                placeholder="物件の詳細情報を入力してください"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-
-            {/* 送信ボタン */}
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Home className="w-4 h-4 mr-2" />
-                )}
-                物件を追加
+            <div className="flex justify-end pt-2">
+              <button type="submit" disabled={loading} className={btnPrimaryClass}>
+                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} 物件を追加
               </button>
             </div>
           </form>
         </div>
-      </div>
-
-      {/* 取引追加フォーム */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">取引追加</h2>
-        </div>
-        <div className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 日付 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  日付 *
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                />
-              </div>
-
-              {/* 取引タイプ */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  取引タイプ *
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                >
+        
+        {/* Transaction Add Form */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 self-start">
+           <div className="p-6 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-green-500" />
+              新規取引追加
+            </h2>
+          </div>
+          <form onSubmit={handleTransactionSubmit} className="p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">取引タイプ *</label>
+                <select name="type" value={transactionFormData.type} onChange={handleTransactionInputChange} className={formInputClass} required >
                   <option value="expense">支出</option>
                   <option value="income">収入</option>
                 </select>
               </div>
-
-              {/* 物件選択 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  物件 *
-                </label>
-                <select
-                  name="property_id"
-                  value={formData.property_id}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                >
-                  <option value="">物件を選択</option>
-                  {properties.map(property => (
-                    <option key={property.id} value={property.id}>
-                      {property.name} - {property.address}
-                    </option>
-                  ))}
+               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">日付 *</label>
+                <input type="date" name="date" value={transactionFormData.date} onChange={handleTransactionInputChange} className={formInputClass} required />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">物件 *</label>
+                <select name="property_id" value={transactionFormData.property_id} onChange={handleTransactionInputChange} className={formInputClass} required>
+                  <option value="">物件を選択してください</option>
+                  {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
-
-              {/* 口座選択 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  口座
-                </label>
-                <select
-                  name="account_id"
-                  value={formData.account_id}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                >
-                  <option value="">口座を選択</option>
-                  {accounts.map(account => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} ({account.institution})
-                    </option>
-                  ))}
-                </select>
+               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">金額 (円) *</label>
+                <input type="number" name="amount" value={transactionFormData.amount} onChange={handleTransactionInputChange} placeholder="例: 10000" className={formInputClass} required />
               </div>
-
-              {/* 金額 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  金額 *
-                </label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={formData.amount}
-                  onChange={handleInputChange}
-                  placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                />
+               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ *</label>
+                <input type="text" name="category" value={transactionFormData.category} onChange={handleTransactionInputChange} placeholder="例: 家賃収入、修繕費" className={formInputClass} required />
               </div>
-
-              {/* カテゴリ */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  カテゴリ *
-                </label>
-                <input
-                  type="text"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  placeholder="例: 家賃収入、修繕費、管理費"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                  required
-                />
+              <div className="sm:col-span-2">
+                 <label className="block text-sm font-medium text-gray-700 mb-1">説明 *</label>
+                <textarea name="description" value={transactionFormData.description} onChange={handleTransactionInputChange} rows={1} placeholder="取引の詳細" className={`${formInputClass} min-h-[48px]`} required />
               </div>
             </div>
-
-            {/* 説明 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                説明 *
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="取引の詳細を入力してください"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                required
-              />
-            </div>
-
-            {/* 送信ボタン */}
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4 mr-2" />
-                )}
-                取引を追加
+            <div className="flex justify-end pt-2">
+               <button type="submit" disabled={loading} className={btnPrimaryClass.replace('bg-blue', 'bg-green').replace('hover:bg-blue', 'hover:bg-green').replace('focus:ring-blue', 'focus:ring-green')}>
+                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} 取引を追加
               </button>
             </div>
           </form>
         </div>
       </div>
 
-      {/* 銀行・クレカ連携（模擬） */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">銀行・クレジットカード連携</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            実際のAPI連携は次のフェーズで実装予定です。現在は模擬データを使用します。
-          </p>
-        </div>
-        <div className="p-6">
-          <button
-            onClick={handleBankSync}
-            disabled={loading}
-            className="flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            ) : (
-              <CreditCard className="w-5 h-5 mr-2" />
-            )}
-            銀行データを連携（模擬）
-          </button>
-        </div>
-      </div>
 
-      {/* 物件一覧 */}
-      <div className="bg-white rounded-lg shadow">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Home className="w-5 h-5 mr-2" />
-            物件一覧
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {properties.length}件の物件
-          </p>
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3">物件一覧</h2>
+            <p className="text-sm text-gray-500 mt-1">{properties.length}件の物件が登録されています</p>
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="relative flex-grow">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input type="text" value={propertyFilter} onChange={e => setPropertyFilter(e.target.value)} placeholder="物件名・住所で検索..." className={`${formInputClass} pl-10`} />
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <select value={sortKey} onChange={e => setSortKey(e.target.value as any)} className={`${formInputClass} py-2.5`}>
+                        <option value="name">物件名</option>
+                        <option value="purchase_date">購入日</option>
+                        <option value="monthly_rent">月額家賃</option>
+                        <option value="purchase_price">購入価格</option>
+                    </select>
+                    <button type="button" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className={btnIconClass} aria-label="昇順・降順切り替え">
+                        {sortOrder === 'asc' ? <ArrowUp className="w-5 h-5" /> : <ArrowDown className="w-5 h-5" />}
+                    </button>
+                    <button onClick={() => setIsFilterVisible(!isFilterVisible)} className={`${btnIconClass} ${isFilterVisible ? 'bg-blue-100 border-blue-300 text-blue-700' : ''}`}>
+                        <Filter className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
+            <Transition show={isFilterVisible} as={Fragment} enter="transition-opacity duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-300" leaveFrom="opacity-100" leaveTo="opacity-0">
+              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">物件タイプ</label>
+                          <select value={filterType} onChange={e => setFilterType(e.target.value)} className={formInputClass}>
+                              <option value="">すべて</option>
+                              {propertyTypeOptions.map(opt=><option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">月額家賃(円)</label>
+                          <div className="flex gap-1">
+                              <input type="number" min="0" value={filterRentMin} onChange={e => setFilterRentMin(e.target.value)} placeholder="最小" className={formInputClass} />
+                              <input type="number" min="0" value={filterRentMax} onChange={e => setFilterRentMax(e.target.value)} placeholder="最大" className={formInputClass} />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">購入価格(円)</label>
+                          <div className="flex gap-1">
+                              <input type="number" min="0" value={filterPriceMin} onChange={e => setFilterPriceMin(e.target.value)} placeholder="最小" className={formInputClass} />
+                              <input type="number" min="0" value={filterPriceMax} onChange={e => setFilterPriceMax(e.target.value)} placeholder="最大" className={formInputClass} />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">購入日</label>
+                          <div className="flex gap-1">
+                            <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className={formInputClass} />
+                            <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className={formInputClass} />
+                          </div>
+                      </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                      <button type="button" onClick={handleFilterReset} className={btnSecondaryClass}>
+                          <RotateCcw className="w-4 h-4 mr-2" /> リセット
+                      </button>
+                  </div>
+              </div>
+            </Transition>
         </div>
         <div className="p-6">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
-          ) : properties.length === 0 ? (
-            <div className="text-center py-8">
-              <Home className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">物件データがありません</p>
+          {loading && !modalProperty ? <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+            : sortedProperties.length === 0 ? (
+            <div className="text-center py-12">
+              <Building className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 font-semibold">該当する物件データがありません</p>
+              <p className="text-sm text-gray-400 mt-1">フィルター条件を確認するか、新しい物件を追加してください。</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {properties.map(property => (
-                <div key={property.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <h3 className="font-medium text-gray-900">{property.name}</h3>
-                      <p className="text-sm text-gray-500">{property.address}</p>
-                      <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                        <span>タイプ: {property.property_type === 'apartment' ? 'マンション' : property.property_type === 'house' ? '一戸建て' : '商業物件'}</span>
-                        {property.purchase_price && (
-                          <span>購入価格: {formatCurrency(property.purchase_price)}</span>
-                        )}
-                        {property.monthly_rent && (
-                          <span>月額家賃: {formatCurrency(property.monthly_rent)}</span>
-                        )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedProperties.map(property => (
+                <div key={property.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-300 cursor-pointer group" onClick={() => openPropertyModal(property)}>
+                  <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                          <h3 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors pr-8">{property.name}</h3>
+                          <p className="text-xs text-gray-500 mt-1">{property.address}</p>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => setSelectedPropertyId(selectedPropertyId === property.id ? '' : property.id)}
-                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                        selectedPropertyId === property.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {selectedPropertyId === property.id ? 'フィルタ解除' : 'フィルタ適用'}
-                    </button>
+                      <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full flex-shrink-0">{propertyTypeOptions.find(o=>o.value === property.property_type)?.label}</span>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-2 text-sm">
+                      <div className="flex flex-col">
+                          <span className="text-xs text-gray-500">購入価格</span>
+                          <span className="font-semibold text-gray-700">{property.purchase_price ? formatCurrency(property.purchase_price) : 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-col">
+                          <span className="text-xs text-gray-500">月額家賃</span>
+                          <span className="font-semibold text-green-600">{property.monthly_rent ? formatCurrency(property.monthly_rent) : 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-col">
+                          <span className="text-xs text-gray-500">購入日</span>
+                          <span className="font-semibold text-gray-700">{property.purchase_date ? formatDate(property.purchase_date) : 'N/A'}</span>
+                      </div>
                   </div>
                 </div>
               ))}
@@ -810,137 +491,114 @@ const PropertyManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* グラフ表示 */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <BarChart3 className="w-5 h-5 mr-2" />
-            収支グラフ
-            {selectedPropertyId && (
-              <span className="ml-2 text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                物件フィルタ適用中
-              </span>
-            )}
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {selectedPropertyId ? '選択された物件の' : '全物件の'}月別の収入・支出・利益の推移
-          </p>
-        </div>
-        <div className="p-6">
-          {chartData.length === 0 ? (
-            <div className="text-center py-8">
-              <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">グラフデータがありません</p>
-              <p className="text-sm text-gray-400">
-                {selectedPropertyId ? '選択された物件の取引データを追加してください' : '取引データを追加するとグラフが表示されます'}
-              </p>
-              <div className="mt-4 text-xs text-gray-400">
-                <p>デバッグ情報:</p>
-                <p>取引データ数: {transactions.length}</p>
-                <p>フィルタ済み取引データ数: {getFilteredTransactions().length}</p>
-                <p>選択物件ID: {selectedPropertyId || 'なし'}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {selectedPropertyId && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <h4 className="font-medium text-blue-900 mb-2">選択物件情報</h4>
-                  {(() => {
-                    const selectedProperty = properties.find(p => p.id === selectedPropertyId);
-                    return selectedProperty ? (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-blue-700 font-medium">物件名:</span>
-                          <span className="text-blue-800 ml-2">{selectedProperty.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700 font-medium">月額家賃:</span>
-                          <span className="text-blue-800 ml-2">
-                            {selectedProperty.monthly_rent ? formatCurrency(selectedProperty.monthly_rent) : '未設定'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700 font-medium">購入価格:</span>
-                          <span className="text-blue-800 ml-2">
-                            {selectedProperty.purchase_price ? formatCurrency(selectedProperty.purchase_price) : '未設定'}
-                          </span>
+      {modalProperty && (
+        <Transition show={!!modalProperty} as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <div className="fixed inset-0 z-50 flex items-center justify-center" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={closePropertyModal}></div>
+            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] relative transform transition-all">
+                  <button onClick={closePropertyModal} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full p-1.5 z-10 transition"><X className="w-5 h-5" /></button>
+                  {!isEditMode ? (
+                    <div className="p-8">
+                      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                        <span className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg"><Home className="w-6 h-6 text-blue-600" /></span>
+                        {modalProperty.name}
+                      </h2>
+                      <div className="space-y-5">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-500 mb-1">住所</label>
+                            <div className="text-lg text-gray-800 flex items-center gap-2">{modalProperty.address}</div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                            <div><label className="block text-sm font-medium text-gray-500 mb-1">物件タイプ</label><div className="text-lg font-semibold text-gray-800">{propertyTypeOptions.find(o=>o.value === modalProperty.property_type)?.label}</div></div>
+                            <div><label className="block text-sm font-medium text-gray-500 mb-1">購入日</label><div className="text-lg font-semibold text-gray-800">{modalProperty.purchase_date}</div></div>
+                            <div><label className="block text-sm font-medium text-gray-500 mb-1">購入価格</label><div className="text-lg font-semibold text-gray-800">{modalProperty.purchase_price ? formatCurrency(modalProperty.purchase_price) : '未設定'}</div></div>
+                            <div><label className="block text-sm font-medium text-gray-500 mb-1">月額家賃</label><div className="text-lg font-semibold text-gray-800">{modalProperty.monthly_rent ? formatCurrency(modalProperty.monthly_rent) : '未設定'}</div></div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-500 mb-1">説明</label>
+                            <div className="text-base text-gray-700 whitespace-pre-line bg-gray-50 rounded-lg p-3 border border-gray-200 min-h-[60px]">{modalProperty.description || <span className="text-gray-400">（説明なし）</span>}</div>
+                          </div>
+                      </div>
+                      <div className="mt-4">
+                        <h3 className="text-md font-semibold text-gray-700 mb-2">関連取引</h3>
+                        <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                           {transactions.filter(t => t.property_id === modalProperty.id).length > 0 ? (
+                              transactions.filter(t => t.property_id === modalProperty.id).map(t => (
+                                <div key={t.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-md text-sm">
+                                  <div>
+                                    <p className="font-medium text-gray-800">{t.description}</p>
+                                    <p className="text-xs text-gray-500">{formatDate(t.transaction_date)}</p>
+                                  </div>
+                                  <p className={`font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                                  </p>
+                                </div>
+                              ))
+                           ) : (
+                              <p className="text-sm text-gray-400 text-center py-4">この物件には取引がありません。</p>
+                           )}
                         </div>
                       </div>
-                    ) : null;
-                  })()}
-                </div>
-              )}
-              <PropertyChart data={chartData} />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 取引一覧 */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">取引一覧</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {getFilteredTransactions().length}件の取引
-            {selectedPropertyId && (
-              <span className="ml-2 text-blue-600">（物件フィルタ適用中）</span>
-            )}
-          </p>
-        </div>
-        <div className="p-6">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
-          ) : getFilteredTransactions().length === 0 ? (
-            <div className="text-center py-8">
-              <Building className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">
-                {selectedPropertyId ? '選択された物件の取引データがありません' : '取引データがありません'}
-              </p>
-              {selectedPropertyId && (
-                <p className="text-sm text-gray-400 mt-2">
-                  取引追加フォームから取引データを追加してください
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {getFilteredTransactions().map(transaction => {
-                const property = properties.find(p => p.id === transaction.property_id);
-                const account = accounts.find(a => a.id === transaction.account_id);
-                
-                return (
-                  <div key={transaction.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{transaction.description}</p>
-                        <p className="text-sm text-gray-500">
-                          {property?.name} • {transaction.category} • {formatDate(transaction.transaction_date || transaction.date || new Date().toISOString())}
-                        </p>
-                        {account && (
-                          <p className="text-xs text-gray-400">{account.name}</p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                          {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
-                        </p>
-                        {transaction.is_auto_generated && (
-                          <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full mt-1">
-                            自動連携
-                          </span>
-                        )}
+                      <div className="flex items-center mt-6 pt-6 border-t border-gray-200">
+                          <button onClick={handleDeleteProperty} disabled={deleteLoading} className="flex items-center gap-2 text-sm font-semibold text-red-600 hover:text-red-800 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                              <Trash2 className="w-4 h-4" />{deleteLoading ? '削除中...' : '削除'}
+                          </button>
+                          <div className="flex-grow" />
+                          <div className="flex items-center gap-3">
+                              <button onClick={closePropertyModal} className={btnSecondaryClass}>閉じる</button>
+                              <button onClick={handleEditClick} className={btnPrimaryClass}><Edit className="w-4 h-4 mr-2" />編集</button>
+                          </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                  ) : (
+                  <>
+                    <div className="p-6 border-b border-gray-200"><h2 className="text-xl font-bold">物件情報を編集</h2></div>
+                    <div className="p-6 space-y-4 overflow-y-auto">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">物件名</label>
+                          <input type="text" name="name" value={editForm?.name || ''} onChange={handleEditFormChange} className={formInputClass} />
+                        </div>
+                         <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">住所</label>
+                          <input type="text" name="address" value={editForm?.address || ''} onChange={handleEditFormChange} className={formInputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">物件タイプ</label>
+                          <select name="property_type" value={editForm?.property_type} onChange={e => setEditForm(prev=> prev ? {...prev, property_type: e.target.value as Property['property_type']} : null)} className={formInputClass}>
+                            {propertyTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">購入価格</label>
+                          <input type="number" name="purchase_price" value={editForm?.purchase_price || ''} onChange={handleEditFormChange} className={formInputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">月額家賃</label>
+                          <input type="number" name="monthly_rent" value={editForm?.monthly_rent || ''} onChange={handleEditFormChange} className={formInputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">購入日</label>
+                          <input type="date" name="purchase_date" value={editForm?.purchase_date || ''} onChange={handleEditFormChange} className={formInputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">説明</label>
+                          <textarea name="description" value={editForm?.description || ''} onChange={handleEditFormChange} className={`${formInputClass} min-h-[80px]`} />
+                        </div>
+                    </div>
+                    <div className="p-6 flex space-x-2 justify-end border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+                        <button onClick={() => setIsEditMode(false)} className={btnSecondaryClass}>キャンセル</button>
+                        <button onClick={handleEditSave} disabled={loading} className={btnPrimaryClass}>
+                          {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>}保存
+                        </button>
+                    </div>
+                  </>
+                  )}
+              </div>
+            </Transition.Child>
+          </div>
+        </Transition>
+      )}
     </div>
   );
 };

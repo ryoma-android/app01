@@ -20,7 +20,7 @@ const AuthPage: React.FC = () => {
   };
 
   const handleSwitchToResetPassword = () => {
-    router.push('/auth/reset-password');
+    router.push('/auth/sendemail');
   };
 
   return (

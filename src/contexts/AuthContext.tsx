@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setSuccess(null);
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `${window.location.origin}/auth/change-password`,
       });
 
       if (error) {
@@ -195,6 +195,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // パスワード更新
+  const updatePassword = async (newPassword: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        setError(error.message);
+      } else if (data.user) {
+        setSuccess('パスワードが正常に更新されました！');
+        // ユーザープロフィールを再取得
+        await fetchUserProfile(data.user);
+      }
+    } catch (err) {
+      console.error('Password update error:', err);
+      setError('パスワード更新に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
@@ -204,6 +230,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signOut,
     resetPassword,
+    updatePassword,
   };
 
   return (

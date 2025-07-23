@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Home, Building, TrendingUp, Brain, FileText, Settings, LogOut, HelpCircle, X, BookOpen, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import UsageGuide from './UsageGuide'; // 新しいコンポーネントをインポート
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,48 +10,18 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) => {
-  const [showHelp, setShowHelp] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false); // UsageGuide用のState
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, signOut } = useAuth();
 
   const menuItems = [
-    { 
-      id: 'dashboard', 
-      label: 'ホーム', 
-      icon: Home,
-      description: ''
-    },
-    { 
-      id: 'properties', 
-      label: '物件管理', 
-      icon: Building,
-      description: '所有している物件の情報を管理します'
-    },
-    { 
-      id: 'analytics', 
-      label: '収支分析', 
-      icon: TrendingUp,
-      description: '詳しい収支データとグラフを見ることができます'
-    },
-    { 
-      id: 'ai-advisor', 
-      label: 'AI相談', 
-      icon: Brain,
-      description: 'AIが収益改善のアドバイスをしてくれます'
-    },
-    { 
-      id: 'documents', 
-      label: '書類管理', 
-      icon: FileText,
-      description: '領収書や契約書などの書類を保存・管理します'
-    },
-    { 
-      id: 'settings', 
-      label: '設定', 
-      icon: Settings,
-      description: 'アカウント設定や各種設定を変更できます'
-    }
+    { id: 'dashboard', label: 'ホーム', icon: Home, description: '全体の収支状況をひと目で確認できます' },
+    { id: 'properties', label: '物件管理', icon: Building, description: '所有している物件の情報を管理します' },
+    { id: 'analytics', label: '収支分析', icon: TrendingUp, description: '詳しい収支データとグラフを見ることができます' },
+    { id: 'ai-advisor', label: 'AI相談', icon: Brain, description: 'AIが収益改善のアドバイスをしてくれます' },
+    { id: 'documents', label: '書類管理', icon: FileText, description: '領収書や契約書などの書類を保存・管理します' },
+    { id: 'settings', label: '設定', icon: Settings, description: 'アカウント設定や各種設定を変更できます' }
   ];
 
   const currentMenuItem = menuItems.find(item => item.id === currentPage);
@@ -59,70 +30,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) =>
     setShowLogoutConfirm(false);
     await signOut();
   };
-
-  const HelpModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900">「次の一手」の使い方</h3>
-          <button 
-            onClick={() => setShowHelp(false)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="閉じる"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-blue-900 mb-2">🏠 はじめに</h4>
-            <p className="text-blue-800 text-sm">
-              「次の一手」へようこそ！まずは「物件管理」から所有している物件を登録してください。
-              その後、領収書などの書類をアップロードすると、AIが自動で収支を分析します。
-            </p>
-          </div>
-
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.id} className="border-l-4 border-blue-500 pl-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Icon className="w-5 h-5 text-blue-600" />
-                  <h4 className="font-semibold text-gray-900">{item.label}</h4>
-                </div>
-                <p className="text-gray-600 text-sm">{item.description}</p>
-              </div>
-            );
-          })}
-
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-green-900 mb-2">💡 上手な使い方のコツ</h4>
-            <ul className="text-green-800 text-sm space-y-1">
-              <li>• 領収書は写真を撮ってすぐにアップロードしましょう</li>
-              <li>• 週に1回はAI相談をチェックして改善提案を確認しましょう</li>
-              <li>• 収支分析で物件の成績を比較してみましょう</li>
-              <li>• 銀行口座と連携すると自動で取引が記録されます</li>
-            </ul>
-          </div>
-
-          <div className="bg-yellow-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-yellow-900 mb-2">❓ よくある質問</h4>
-            <div className="text-yellow-800 text-sm space-y-2">
-              <div>
-                <p className="font-medium">Q: パソコンが苦手でも使えますか？</p>
-                <p>A: はい！簡単な操作だけで使えるように設計されています。</p>
-              </div>
-              <div>
-                <p className="font-medium">Q: データは安全ですか？</p>
-                <p>A: 銀行レベルの暗号化でデータを保護しています。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   const LogoutConfirmModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -230,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) =>
           {/* フッター */}
           <div className="p-4 border-t border-gray-200 space-y-2">
             <button 
-              onClick={() => setShowHelp(true)}
+              onClick={() => setIsGuideOpen(true)}
               className="w-full flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
               aria-label="使い方ガイドを開く"
             >
@@ -305,7 +212,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) =>
         </main>
       </div>
 
-      {showHelp && <HelpModal />}
+      {/* 新しいUsageGuideを条件付きでレンダリング */}
+      {isGuideOpen && <UsageGuide onClose={() => setIsGuideOpen(false)} />}
       {showLogoutConfirm && <LogoutConfirmModal />}
     </div>
   );

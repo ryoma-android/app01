@@ -7,6 +7,7 @@ import { Plus, Building, AlertCircle, CheckCircle, Loader2, Home, X, Filter, Sea
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency, formatDate } from '../utils/format';
 import { Transition } from '@headlessui/react';
+import toast from 'react-hot-toast';
 
 interface PropertyManagementProps {
   properties: Property[];
@@ -19,8 +20,8 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  // const [successMessage, setSuccessMessage] = useState('');
+  // const [errorMessage, setErrorMessage] = useState('');
   
   const [propertyFilter, setPropertyFilter] = useState('');
   const [sortKey, setSortKey] = useState<'name' | 'purchase_date' | 'monthly_rent' | 'purchase_price'>('name');
@@ -98,36 +99,26 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
 
   const loadProperties = async () => {
     const { data, error } = await queryHelper.properties();
-    if (error) setErrorMessage('物件データの読み込みに失敗しました');
+    if (error) toast.error('物件データの読み込みに失敗しました');
     else if (data) setProperties(data);
   };
   
   const loadTransactions = async () => {
     const { data, error } = await queryHelper.transactions();
-    if (error) setErrorMessage('取引データの読み込みに失敗しました');
+    if (error) toast.error('取引データの読み込みに失敗しました');
     else if (data) setTransactions(data);
   };
 
   const loadAccounts = async () => {
     const { data, error } = await queryHelper.accounts();
-    if (error) setErrorMessage('口座データの読み込みに失敗しました');
+    if (error) toast.error('口座データの読み込みに失敗しました');
     else if (data) setAccounts(data);
-  };
-
-  const handleApiResponse = (error: any | null, successMsg: string, errorMsg: string) => {
-    if (error) {
-      console.error(errorMsg, error);
-      setErrorMessage(`${errorMsg}: ${error.message}`);
-    } else {
-      setSuccessMessage(successMsg);
-      setTimeout(() => setSuccessMessage(''), 3000);
-    }
   };
 
   const handlePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!propertyFormData.name || !propertyFormData.address || !propertyFormData.purchase_date) {
-      setErrorMessage('物件名、住所、購入日は必須です');
+      toast.error('物件名、住所、購入日は必須です');
       return;
     }
     setLoading(true);
@@ -141,12 +132,13 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
     };
     
     const { data, error } = await supabase.from('properties').insert([newPropertyData]).select();
-    handleApiResponse(error, '物件が正常に追加されました', '物件の追加に失敗しました');
     
-    if (!error && data) {
+    if (error) {
+      toast.error(`物件の追加に失敗しました: ${error.message}`);
+    } else if (data) {
+      toast.success('物件が正常に追加されました');
       setPropertyFormData({ name: '', address: '', property_type: 'apartment', purchase_price: '', current_value: '', monthly_rent: '', purchase_date: new Date().toISOString().split('T')[0], description: '' });
       await loadProperties();
-      onPropertyAdded(data[0]);
     }
     setLoading(false);
   };
@@ -154,39 +146,45 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transactionFormData.property_id || !transactionFormData.description || !transactionFormData.amount || !transactionFormData.category) {
-      setErrorMessage('必須項目を入力してください');
+      toast.error('必須項目を入力してください');
       return;
     }
     setLoading(true);
+    try {
+      const newTransaction = {
+        property_id: transactionFormData.property_id,
+        type: transactionFormData.type,
+        category: transactionFormData.category,
+        amount: parseFloat(transactionFormData.amount),
+        description: transactionFormData.description,
+        transaction_date: transactionFormData.date,
+        account_id: transactionFormData.account_id || null,
+        is_manual_entry: true,
+        user_id: user?.id
+      };
 
-    const newTransaction = {
-      property_id: transactionFormData.property_id,
-      type: transactionFormData.type,
-      category: transactionFormData.category,
-      amount: parseFloat(transactionFormData.amount),
-      description: transactionFormData.description,
-      transaction_date: transactionFormData.date,
-      account_id: transactionFormData.account_id || null,
-      is_manual_entry: true,
-      user_id: user?.id
-    };
-
-    const { error } = await supabase.from('transactions').insert([newTransaction]);
-    handleApiResponse(error, '取引データが正常に保存されました', '取引データの保存に失敗しました');
-    
-    if (!error) {
-      setTransactionFormData({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        amount: '',
-        type: 'expense',
-        category: '',
-        property_id: '',
-        account_id: ''
-      });
-      await loadTransactions();
+      const { error } = await supabase.from('transactions').insert([newTransaction]);
+      
+      if (error) {
+        toast.error(`取引データの保存に失敗しました: ${error.message}`);
+      } else {
+        toast.success('取引データが正常に保存されました');
+        setTransactionFormData({
+          date: new Date().toISOString().split('T')[0],
+          description: '',
+          amount: '',
+          type: 'expense',
+          category: '',
+          property_id: '',
+          account_id: ''
+        });
+        await loadTransactions();
+      }
+    } catch (err: any) {
+      toast.error(`予期せぬエラーが発生しました: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handlePropertyInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -251,8 +249,10 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
     setLoading(true);
     const { id, created_at, updated_at, owner_id, ...updateData } = editForm;
     const { error } = await supabase.from('properties').update(updateData).eq('id', id);
-    handleApiResponse(error, '物件情報を更新しました', '物件の更新に失敗しました');
-    if (!error) {
+    if (error) {
+      toast.error(`物件の更新に失敗しました: ${error.message}`);
+    } else {
+      toast.success('物件情報を更新しました');
       await loadProperties();
       setModalProperty({ ...editForm });
       setIsEditMode(false);
@@ -264,8 +264,10 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
     if (!modalProperty || !window.confirm('本当にこの物件を削除しますか？関連する取引も全て削除されます。')) return;
     setDeleteLoading(true);
     const { error } = await supabase.from('properties').delete().eq('id', modalProperty.id);
-    handleApiResponse(error, '物件を削除しました', '物件の削除に失敗しました');
-    if (!error) {
+    if (error) {
+      toast.error(`物件の削除に失敗しました: ${error.message}`);
+    } else {
+      toast.success('物件を削除しました');
       await loadData();
       closePropertyModal();
     }
@@ -276,6 +278,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
   const btnClass = "inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-150 disabled:cursor-not-allowed";
   const btnPrimaryClass = `${btnClass} bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 disabled:bg-blue-400 disabled:opacity-75`;
   const btnSecondaryClass = `${btnClass} bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400 disabled:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus:ring-gray-500`;
+  const btnGreenClass = `${btnClass} bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-400 disabled:opacity-75`;
   const btnIconClass = "inline-flex items-center justify-center p-2.5 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 transition dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700";
 
   return (
@@ -285,8 +288,8 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
         <p className="text-gray-600 mt-1">物件情報の登録とそれに関連する取引データを管理します。</p>
       </div>
       
-      {successMessage && <div className="bg-green-100 text-green-800 p-4 rounded-lg flex items-center gap-2"><CheckCircle className="w-5 h-5" />{successMessage}</div>}
-      {errorMessage && <div className="bg-red-100 text-red-800 p-4 rounded-lg flex items-center gap-2"><AlertCircle className="w-5 h-5" />{errorMessage}</div>}
+      {/* {successMessage && <div className="bg-green-100 text-green-800 p-4 rounded-lg flex items-center gap-2"><CheckCircle className="w-5 h-5" />{successMessage}</div>}
+      {errorMessage && <div className="bg-red-100 text-red-800 p-4 rounded-lg flex items-center gap-2"><AlertCircle className="w-5 h-5" />{errorMessage}</div>} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Property Add Form */}
@@ -376,7 +379,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
               </div>
             </div>
             <div className="flex justify-end pt-2">
-               <button type="submit" disabled={loading} className={btnPrimaryClass.replace('bg-blue', 'bg-green').replace('hover:bg-blue', 'hover:bg-green').replace('focus:ring-blue', 'focus:ring-green')}>
+               <button type="submit" disabled={loading} className={btnGreenClass}>
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} 取引を追加
               </button>
             </div>

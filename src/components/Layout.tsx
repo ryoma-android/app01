@@ -1,7 +1,10 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Home, Building, TrendingUp, Brain, FileText, Settings, LogOut, HelpCircle, X, BookOpen, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import UsageGuide from './UsageGuide'; // 新しいコンポーネントをインポート
+import ThemeSwitcher from './ThemeSwitcher'; // ThemeSwitcherをインポート
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -189,6 +192,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) =>
               </div>
               
               <div className="flex items-center space-x-4">
+                <ThemeSwitcher /> {/* ThemeSwitcherを配置 */}
                 <div className="text-sm text-gray-500 hidden sm:block">
                   {new Date().toLocaleDateString('ja-JP', { 
                     year: 'numeric', 

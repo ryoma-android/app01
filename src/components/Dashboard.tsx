@@ -7,6 +7,7 @@ import UsageGuide from './UsageGuide';
 import { HelpCircle, Home, TrendingUp, Banknote, FileText, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import toast from 'react-hot-toast';
+import Portal from './Portal';
 
 interface DashboardProps {
   properties: Property[];
@@ -245,22 +246,28 @@ const Dashboard: React.FC<DashboardProps> = ({ properties, transactions, account
           </div>
         </div>
       </div>
-      {isGuideOpen && <UsageGuide onClose={() => setIsGuideOpen(false)} />}
-      {/* 物件詳細モーダル */}
-      {selectedProperty && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-full">
-            <button onClick={() => { setSelectedProperty(null); setIsEditMode(false); setEditForm(null); }} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full p-1.5 z-10 transition"><X className="w-5 h-5" /></button>
-            
+      
+      <Portal>
+        {isGuideOpen && <UsageGuide onClose={() => setIsGuideOpen(false)} />}
+        {/* 物件詳細モーダル */}
+        {selectedProperty && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-full">
+              <button onClick={() => { setSelectedProperty(null); setIsEditMode(false); setEditForm(null); }} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full p-1.5 z-10 transition"><X className="w-5 h-5" /></button>
+              
             {!isEditMode ? (
-              <div className="p-8">
+              <div className="p-8 overflow-y-auto">
                 <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
                   <span className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
                     <Home className="w-6 h-6 text-blue-600" />
                   </span>
-                  {selectedProperty.name}
+                  物件詳細
                 </h2>
                 <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">物件名</label>
+                    <div className="text-lg font-semibold text-gray-800">{selectedProperty.name}</div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">住所</label>
                     <div className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -330,7 +337,7 @@ const Dashboard: React.FC<DashboardProps> = ({ properties, transactions, account
             ) : isEditMode && editForm ? (
               <>
                 <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-xl font-bold">物件情報を編集</h2>
+                  <h2 className="text-xl font-bold">「{editForm.name}」を編集中</h2>
                 </div>
                 <div className="p-6 space-y-4 overflow-y-auto">
                   {/* 物件名 */}
@@ -460,6 +467,7 @@ const Dashboard: React.FC<DashboardProps> = ({ properties, transactions, account
         />
       )}
       {/* ★ここまで追加 */}
+      </Portal>
     </>
   );
 };

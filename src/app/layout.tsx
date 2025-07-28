@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,31 +18,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ja">
-      <body className={`${inter.className} antialiased`} suppressHydrationWarning={true}>
-        {children}
-        <Toaster 
-          position="bottom-center"
-          toastOptions={{
-            duration: 5000,
-            style: {
-              background: '#333',
-              color: '#fff',
-            },
-            success: {
-              style: {
-                background: '#4ade80',
-                color: 'white',
-              },
-            },
-            error: {
-              style: {
-                background: '#f87171',
-                color: 'white',
-              },
-            },
-          }}
-        />
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning={true}>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </ThemeProvider>
+        <div id="modal-root" />
       </body>
     </html>
   );

@@ -4,17 +4,6 @@ import { OpenAIEmbeddings, ChatOpenAI } from '@langchain/openai';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
-// Supabaseクライアントを初期化
-// 環境変数が設定されていることを前提とします
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URLまたはAnon Keyが設定されていません。');
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // よくある質問・不動産投資の基礎知識
@@ -64,6 +53,15 @@ function summarizeTransactions(transactions: any[]): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Supabaseクライアントを関数スコープで初期化
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json({ error: 'Supabaseの環境変数が設定されていません。' }, { status: 500 });
+  }
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
   try {
     const { question, transactions } = await req.json();
 

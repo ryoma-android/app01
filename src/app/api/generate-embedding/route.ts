@@ -2,22 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { OpenAIEmbeddings } from '@langchain/openai';
 
-// 環境変数を直接参照
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-const openaiApiKey = process.env.OPENAI_API_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey || !openaiApiKey) {
-  // 本番環境ではより詳細なロギングを推奨
-  console.error('APIキーなどの環境変数が設定されていません。');
-  // このAPIはサーバーサイドでのみ動作するため、ビルド時にエラーを投げる
-  throw new Error('APIキーなどの環境変数が設定されていません。');
-}
-
-// SupabaseクライアントをService Role Keyで初期化
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const embeddings = new OpenAIEmbeddings({ openAIApiKey: openaiApiKey });
-
 // 物件情報を整形してテキスト化する関数
 function formatPropertyForEmbedding(property: any): string {
   const details = [
@@ -33,6 +17,19 @@ function formatPropertyForEmbedding(property: any): string {
 }
 
 export async function POST(req: NextRequest) {
+  // 環境変数を関数スコープ内で取得
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey || !openaiApiKey) {
+    console.error('APIキーなどの環境変数が設定されていません。');
+    return NextResponse.json({ error: 'サーバーの設定エラーです。管理者にお問い合わせください。' }, { status: 500 });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const embeddings = new OpenAIEmbeddings({ openAIApiKey: openaiApiKey });
+
   try {
     const { propertyId } = await req.json();
 

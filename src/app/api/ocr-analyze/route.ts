@@ -3,12 +3,15 @@ import { OpenAI } from 'langchain/llms/openai';
 import { createClient } from '@supabase/supabase-js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function POST(req: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    return NextResponse.json({ error: 'Supabaseの環境変数が設定されていません。' }, { status: 500 });
+  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  
   try {
     const { ocrText, userId } = await req.json();
     if (!ocrText || !userId) {

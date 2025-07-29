@@ -77,6 +77,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) {
         console.error('Profile fetch error:', error);
         setError('プロフィールの取得に失敗しました');
+        setLoading(false); // ★追加: エラー時にもローディングを終了する
         return;
       }
 
@@ -84,6 +85,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       console.error('Profile fetch error:', err);
       setError('プロフィールの取得に失敗しました');
+      setLoading(false); // ★追加: 予期せぬエラー時にもローディングを終了する
     }
   };
 

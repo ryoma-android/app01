@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { supabase } from '@/utils/supabase';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+
+const supabase = createClient();
 
 const DatabaseTest: React.FC = () => {
   const [loading, setLoading] = useState(false);

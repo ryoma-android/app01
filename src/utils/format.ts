@@ -18,4 +18,11 @@ export const formatFileSize = (bytes: number): string => {
 // 日付フォーマット関数
 export const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('ja-JP');
-}; 
+};
+
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+ 
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+} 

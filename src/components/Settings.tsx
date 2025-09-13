@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabase';
+import { createClient } from '@/utils/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { User, Shield, Bell, CreditCard, HelpCircle } from 'lucide-react';
+
+const supabase = createClient();
 
 type NotificationSettings = {
   important: boolean;
@@ -14,6 +18,7 @@ const defaultNotificationSettings: NotificationSettings = {
 };
 
 const Settings: React.FC = () => {
+  const { user, loading: authLoading, error: authError } = useAuth();
   const [email, setEmail] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,32 +1,32 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from "@/contexts/AuthContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+import { SWRProvider } from "@/components/SWRProvider";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: '次の一手 - 不動産AI会計',
-  description: '自主管理オーナーのためのインサイト駆動型AI会計アシスタント',
+  title: "AI Real Estate Manager",
+  description: "Advanced AI-powered real estate management application",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning={true}>
-        <ThemeProvider>
+    <html lang="ja" className={`${inter.className} light`} style={{ colorScheme: 'light' }} suppressHydrationWarning>
+      <body>
+        <SWRProvider>
           <AuthProvider>
             {children}
-            <Toaster position="bottom-right" />
+            <Toaster />
           </AuthProvider>
-        </ThemeProvider>
-        <div id="modal-root" />
+        </SWRProvider>
+        <div id="modal-root"></div>
       </body>
     </html>
   );

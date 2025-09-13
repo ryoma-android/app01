@@ -1,9 +1,15 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import useSWR from 'swr';
 import { Property, Transaction } from '../types';
+import { createClient } from '@/utils/supabase/client';
 import { Brain, MessageSquare, History, Plus, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useAuth } from '../contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
+
+const supabase = createClient();
 
 interface AISuggestionsProps {
   properties: Property[];
@@ -46,23 +52,27 @@ const demoConversation: Message[] = [
   }
 ];
 
-const AISuggestions: React.FC<AISuggestionsProps> = ({ properties, transactions }) => {
+const AISuggestions: React.FC = () => {
+  const { data: properties, error: propertiesError, isLoading: isPropertiesLoading } = useSWR<Property[]>('/api/properties');
+  const { data: transactions, error: transactionsError, isLoading: isTransactionsLoading } = useSWR<Transaction[]>('/api/transactions');
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // This is for the AI response loading
   
   // --- 履歴機能用のStateを追加 ---
   const [showHistory, setShowHistory] = useState(false);
   const [savedHistories, setSavedHistories] = useState<ChatHistory[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const wasLoading = useRef(false);
+
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+  const wasLoading = React.useRef(false);
 
   // --- 履歴機能のロジックを追加 ---
 
   // ローカルストレージから履歴を読み込む
-  useEffect(() => {
+  React.useEffect(() => {
     try {
       const saved = localStorage.getItem('ai-chat-histories');
       if (saved) {
@@ -117,7 +127,7 @@ const AISuggestions: React.FC<AISuggestionsProps> = ({ properties, transactions 
   };
 
   // ストリーミング完了時に会話を保存する
-  useEffect(() => {
+  React.useEffect(() => {
     if (wasLoading.current && !isLoading && messages.length > 0) {
       saveCurrentChat();
     }
@@ -156,7 +166,7 @@ const AISuggestions: React.FC<AISuggestionsProps> = ({ properties, transactions 
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -209,6 +219,12 @@ const AISuggestions: React.FC<AISuggestionsProps> = ({ properties, transactions 
       setIsLoading(false);
     }
   };
+
+  const isDataLoading = isPropertiesLoading || isTransactionsLoading;
+  const swrError = propertiesError || transactionsError;
+
+  if (swrError) return <div>Failed to load data</div>;
+  if (isDataLoading) return <div>Loading...</div>;
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-gray-50">

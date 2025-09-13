@@ -1,9 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/utils/supabase';
+import { User } from '@supabase/supabase-js';
+import { createClient } from '@/utils/supabase/client';
 import { AuthContextType, LoginCredentials, SignUpCredentials, User as AppUser } from '@/types';
+import { useRouter } from 'next/navigation';
+
+const supabase = createClient();
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -24,49 +27,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  const router = useRouter();
 
-  // ユーザーセッションの初期化
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // 現在のセッションを取得
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          await fetchUserProfile(session.user);
-        }
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-        setError('認証の初期化に失敗しました');
-      } finally {
+  useEffect(() => {                                                                                                                                                                                                                                               
+    const fetchUserAndProfile = async () => {
+      // 既存のセッションを取得
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // セッションがあれば、プロフィールも取得
+        await fetchUserProfile(session.user);
+      } else {
+        // セッションがなければローディング終了
         setLoading(false);
-        setInitialized(true);
       }
     };
+    
+    fetchUserAndProfile();
 
-    // クライアントサイドでのみ初期化を実行
-    if (typeof window !== 'undefined') {
-      initializeAuth();
-
-      // 認証状態の変更を監視
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (session?.user) {
-            await fetchUserProfile(session.user);
-          } else {
-            setUser(null);
-          }
-          setLoading(false);
+    // 認証状態の変更をリッスン
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          await fetchUserProfile(session.user);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
         }
-      );
+        // SIGNED_IN以外のイベント後もローディング状態を更新することが重要
+        if (event === 'INITIAL_SESSION') {
+             setLoading(false);
+        }
+      }
+    );
 
-      return () => subscription.unsubscribe();
-    }
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // ユーザープロフィールを取得
   const fetchUserProfile = async (supabaseUser: User) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -74,53 +74,60 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .eq('id', supabaseUser.id)
         .single();
 
-      if (error) {
-        console.error('Profile fetch error:', error);
-        setError('プロフィールの取得に失敗しました');
-        setLoading(false); // ★追加: エラー時にもローディングを終了する
-        return;
-      }
-
+      if (error) throw error;
+      
       setUser(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Profile fetch error:', err);
-      setError('プロフィールの取得に失敗しました');
-      setLoading(false); // ★追加: 予期せぬエラー時にもローディングを終了する
-    }
-  };
-
-  // サインイン
-  const signIn = async (credentials: LoginCredentials) => {
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: credentials.email,
-        password: credentials.password,
-      });
-
-      if (error) {
-        setError(error.message);
-      } else if (data.user) {
-        // ログイン成功時の処理
-        await fetchUserProfile(data.user);
-        setSuccess('ログインに成功しました！');
-        
-        // 少し遅延させてからリダイレクト
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1000);
-      }
-    } catch (err) {
-      console.error('Sign in error:', err);
-      setError('サインインに失敗しました');
+      setUser(null); // エラー時はユーザー情報をクリア
     } finally {
       setLoading(false);
     }
   };
 
+  // サインイン
+  const signIn = async (credentials: LoginCredentials) => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+
+      // onAuthStateChangeが後続の処理（プロフィール取得など）をハンドルする
+      setSuccess('ログインに成功しました！');
+      //
+    } catch (err: any) {
+      console.error('Sign in error:', err);
+      setError(err.message || 'サインインに失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // サインアウト
+  const signOut = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setUser(null); // Explicitly set user to null for immediate UI update
+      router.push('/');
+
+    } catch (err: any) {
+      console.error('Sign out error:', err);
+      setError('サインアウトに失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   // サインアップ
   const signUp = async (credentials: SignUpCredentials) => {
     try {
@@ -141,7 +148,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) {
         setError(error.message);
       } else {
-        // サインアップ成功時の処理
         setSuccess('アカウントが正常に作成されました！確認メールを送信しました。メールを確認してログインしてください。');
       }
     } catch (err) {
@@ -151,28 +157,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
     }
   };
-
-  // サインアウト
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setUser(null);
-      }
-    } catch (err) {
-      console.error('Sign out error:', err);
-      setError('サインアウトに失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  
   // パスワードリセット
   const resetPassword = async (email: string) => {
     try {

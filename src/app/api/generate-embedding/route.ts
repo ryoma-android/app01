@@ -1,5 +1,5 @@
+import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { OpenAIEmbeddings } from '@langchain/openai';
 
 // 物件情報を整形してテキスト化する関数
@@ -17,31 +17,36 @@ function formatPropertyForEmbedding(property: any): string {
 }
 
 export async function POST(req: NextRequest) {
-  // 環境変数を関数スコープ内で取得
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+  const supabase = createClient();
+  const body = await req.json();
+  const { propertyId } = body;
+
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
-  if (!supabaseUrl || !supabaseServiceKey || !openaiApiKey) {
-    console.error('APIキーなどの環境変数が設定されていません。');
+  if (!openaiApiKey) {
+    console.error('OpenAI APIキーが設定されていません。');
     return NextResponse.json({ error: 'サーバーの設定エラーです。管理者にお問い合わせください。' }, { status: 500 });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const embeddings = new OpenAIEmbeddings({ openAIApiKey: openaiApiKey });
 
   try {
-    const { propertyId } = await req.json();
-
     if (!propertyId) {
       return NextResponse.json({ error: '物件IDが必要です。' }, { status: 400 });
     }
+    
+    // Check if the user is authenticated
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: '認証が必要です。' }, { status: 401 });
+    }
 
-    // 1. 指定されたIDの物件データを取得
+    // 1. Fetch property data (RLS will be applied)
     const { data: property, error: selectError } = await supabase
       .from('properties')
       .select('id, name, address, property_type, purchase_price, monthly_rent, building_structure, building_year')
       .eq('id', propertyId)
+      .eq('owner_id', user.id) // Ensure the user owns the property
       .single();
 
     if (selectError) {
@@ -49,17 +54,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (!property) {
-      return NextResponse.json({ error: `物件(ID: ${propertyId})が見つかりません。` }, { status: 404 });
+      return NextResponse.json({ error: `物件(ID: ${propertyId})が見つからないか、アクセス権がありません。` }, { status: 404 });
     }
 
-    // 2. 物件情報をベクトル化
+    // 2. Vectorize property information
     const inputText = formatPropertyForEmbedding(property);
     const embedding = await embeddings.embedQuery(inputText);
 
-    // 3. データベースを更新
+    // 3. Update the database
     const { error: updateError } = await supabase
       .from('properties')
-      .update({ embedding: embedding, updated_at: new Date().toISOString() }) // updated_atも手動で更新
+      .update({ embedding: embedding, updated_at: new Date().toISOString() })
       .eq('id', property.id);
 
     if (updateError) {

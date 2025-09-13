@@ -41,7 +41,7 @@ export interface Database {
           purchase_price: number
           purchase_date: string
           monthly_rent: number
-          user_id: string
+          owner_id: string
           created_at: string
           updated_at: string
           square_meters?: number
@@ -59,7 +59,7 @@ export interface Database {
           purchase_price: number
           purchase_date: string
           monthly_rent: number
-          user_id: string
+          owner_id: string
           created_at?: string
           updated_at?: string
           square_meters?: number
@@ -77,7 +77,7 @@ export interface Database {
           purchase_price?: number
           purchase_date?: string
           monthly_rent?: number
-          user_id?: string
+          owner_id?: string
           created_at?: string
           updated_at?: string
           square_meters?: number
@@ -136,6 +136,44 @@ export interface Database {
           is_recurring?: boolean
           recurring_interval?: 'monthly' | 'quarterly' | 'yearly'
           user_id?: string
+        }
+      }
+      accounts: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          type: 'bank' | 'credit_card' | 'cash' | 'investment'
+          balance: number
+          currency: string
+          account_number?: string
+          institution?: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          type: 'bank' | 'credit_card' | 'cash' | 'investment'
+          balance?: number
+          currency?: string
+          account_number?: string
+          institution?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          type?: 'bank' | 'credit_card' | 'cash' | 'investment'
+          balance?: number
+          currency?: string
+          account_number?: string
+          institution?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       ai_recommendations: {

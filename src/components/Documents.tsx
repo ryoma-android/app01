@@ -1,9 +1,13 @@
+'use client'
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileText, Upload, Download, Eye, Calendar, Search, Filter, Loader2 } from 'lucide-react';
-import { supabase, storage } from '../utils/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { Database } from '../types/supabase';
 import { formatDate, formatFileSize } from '../utils/format';
 import { Property } from '../types';
+
+const supabase = createClient();
 
 const DOCUMENT_BUCKET = 'documents';
 
@@ -34,6 +38,7 @@ interface DocumentsProps {
 }
 
 const Documents: React.FC<DocumentsProps> = ({ onPropertyAdded }) => {
+  const [userId, setUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
@@ -46,13 +51,13 @@ const Documents: React.FC<DocumentsProps> = ({ onPropertyAdded }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrProcessing, setOcrProcessing] = useState(false);
 
-  // ユーザーID取得（認証連携が必要な場合は修正）
-  const [userId, setUserId] = useState<string | null>(null);
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserId(data?.user?.id ?? null);
-    })();
+    const fetchCurrentUserId = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id ?? null);
+    };
+    fetchCurrentUserId();
+    debugger
   }, []);
 
   const PAGE_SIZE = 50;
@@ -81,7 +86,9 @@ const Documents: React.FC<DocumentsProps> = ({ onPropertyAdded }) => {
   };
 
   useEffect(() => {
-    if (userId) fetchDocuments();
+    if (userId) {
+      fetchDocuments();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, page]);
 
@@ -95,8 +102,8 @@ const Documents: React.FC<DocumentsProps> = ({ onPropertyAdded }) => {
     try {
       // 1. 書類情報をDBとストレージに保存
       const filePath = `${userId}/${Date.now()}_${file.name}`;
-      await storage.uploadFile(DOCUMENT_BUCKET, filePath, file);
-      const { data: urlData } = storage.getPublicUrl(DOCUMENT_BUCKET, filePath);
+      await supabase.storage.from(DOCUMENT_BUCKET).upload(filePath, file);
+      const { data: urlData } = supabase.storage.from(DOCUMENT_BUCKET).getPublicUrl(filePath);
       if (!urlData?.publicUrl) throw new Error("URLの取得に失敗しました");
 
       const { data: document, error: dbError } = await supabase.from('documents').insert({

@@ -1,11 +1,11 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeContextType {
-  theme: Theme;
+  theme: 'light'; // Theme is always light
   setTheme: (theme: Theme) => void;
 }
 
@@ -16,49 +16,16 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
-  const [theme, setThemeState] = useState<Theme>('system');
-
-  useEffect(() => {
-    // localStorageから保存されたテーマを読み込む
-    const storedTheme = localStorage.getItem('theme') as Theme | null;
-    if (storedTheme) {
-      setThemeState(storedTheme);
-    }
-  }, []);
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    
-    const applyTheme = (themeToApply: Theme) => {
-      const isDark =
-        themeToApply === 'dark' ||
-        (themeToApply === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-      root.classList.remove(isDark ? 'light' : 'dark');
-      root.classList.add(isDark ? 'dark' : 'light');
-    };
-
-    applyTheme(theme);
-
-    // systemテーマの変更を監視
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      if (theme === 'system') {
-        applyTheme('system');
-      }
-    };
-    
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
-
-  const setTheme = (newTheme: Theme) => {
-    localStorage.setItem('theme', newTheme);
-    setThemeState(newTheme);
+  // Always provide 'light' as the theme and a no-op setter.
+  const value = {
+    theme: 'light' as const,
+    setTheme: () => {
+      console.log("Theme is locked to 'light' and cannot be changed.");
+    },
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

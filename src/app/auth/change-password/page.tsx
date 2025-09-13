@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
+
+const supabase = createClient();
 
 export default function PasswordReset() {
   const router = useRouter();
